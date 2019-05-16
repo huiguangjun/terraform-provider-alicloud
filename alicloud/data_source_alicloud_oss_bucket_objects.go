@@ -111,7 +111,7 @@ func dataSourceAlicloudOssBucketObjects() *schema.Resource {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
-						"is_lastest": {
+						"is_latest": {
 							Type:     schema.TypeBool,
 							Computed: true,
 						},
@@ -261,8 +261,8 @@ func dataSourceAlicloudOssBucketObjectVersionsRead(d *schema.ResourceData, meta 
 		initialOptions = append(initialOptions, oss.Prefix(keyPrefix))
 	}
 
-	var allObjectVersions []oss.ObjectVersionProperty
-	var allObjectDeleteds []oss.ObjectDeleteMarkerProperty
+	var allObjectVersions []oss.ObjectVersionProperties
+	var allObjectDeleteds []oss.ObjectDeleteMarkerProperties
 
 	var flagVersions = false
 	var flagDeleted  = false
@@ -328,7 +328,7 @@ func dataSourceAlicloudOssBucketObjectVersionsRead(d *schema.ResourceData, meta 
 	return bucketObjectsDescriptionAttributesVersions(d, bucketName, allObjectVersions, allObjectDeleteds, meta)
 }
 
-func bucketObjectsDescriptionAttributesVersions(d *schema.ResourceData, bucketName string, objectVersions []oss.ObjectVersionProperty, objectDeleteds []oss.ObjectDeleteMarkerProperty, meta interface{}) error {
+func bucketObjectsDescriptionAttributesVersions(d *schema.ResourceData, bucketName string, objectVersions []oss.ObjectVersionProperties, objectDeleteds []oss.ObjectDeleteMarkerProperties, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	var ids []string
 	var s []map[string]interface{}
@@ -339,7 +339,7 @@ func bucketObjectsDescriptionAttributesVersions(d *schema.ResourceData, bucketNa
 			"storage_class":          object.StorageClass,
 			"last_modification_time": object.LastModified.Format(time.RFC3339),
 			"version_id":             object.VersionId,
-			"is_lastest":             object.IsLatest,
+			"is_latest":             object.IsLatest,
 		}
 
 		var options []oss.Option
@@ -383,7 +383,7 @@ func bucketObjectsDescriptionAttributesVersions(d *schema.ResourceData, bucketNa
 			"key":                    object.Key,
 			"last_modification_time": object.LastModified.Format(time.RFC3339),
 			"version_id":             object.VersionId,
-			"is_lastest":             object.IsLatest,
+			"is_latest":             object.IsLatest,
 			"delete_marker":          true,
 		}
 

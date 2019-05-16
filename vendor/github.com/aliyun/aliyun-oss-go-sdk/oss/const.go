@@ -166,5 +166,7 @@ const (
 
 	CheckpointFileSuffix = ".cp" // Checkpoint file suffix
 
+	NullVersion = "null"
+
 	Version = "v1.9.7" // Go SDK version
 )

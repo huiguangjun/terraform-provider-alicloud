@@ -210,6 +210,12 @@ func resourceAlicloudOssBucket() *schema.Resource {
 				ValidateFunc: validateOssBucketStorageClass,
 			},
 
+			"force_destroy": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+			},
+
 			"versioning": {
 				Type:     schema.TypeMap,
 				Optional: true,
@@ -345,7 +351,7 @@ func resourceAlicloudOssBucketRead(d *schema.ResourceData, meta interface{}) err
 	}
 
 	if &info.BucketInfo.SseRule != nil {
-		if info.BucketInfo.SseRule.SSEAlgorithm != "None"  {
+		if len(info.BucketInfo.SseRule.SSEAlgorithm) > 0 && info.BucketInfo.SseRule.SSEAlgorithm != "None"  {
 			rule := make(map[string]interface{})
 			rule["sse_algorithm"] = info.BucketInfo.SseRule.SSEAlgorithm
 			if &info.BucketInfo.SseRule.KMSMasterKeyID != nil {
@@ -624,11 +630,11 @@ func resourceAlicloudOssBucketUpdate(d *schema.ResourceData, meta interface{}) e
 		d.SetPartial("versioning")
 	}
 
-	if d.HasChange("tagging") {
+	if d.HasChange("tags") {
 		if err := resourceAlicloudOssBucketTaggingUpdate(client, d); err != nil {
 			return err
 		}
-		d.SetPartial("tagging")
+		d.SetPartial("tags")
 	}
 
 	if d.HasChange("server_side_encryption_rule") {
@@ -1051,6 +1057,34 @@ func resourceAlicloudOssBucketDelete(d *schema.ResourceData, meta interface{}) e
 			return nil, ossClient.DeleteBucket(d.Id())
 		})
 		if err != nil {
+			if err.(oss.ServiceError).Code == "BucketNotEmpty" {
+				if d.Get("force_destroy").(bool) {
+					log.Printf("[DEBUG] oss Bucket attempting to forceDestroy %+v", err)
+					client.WithOssClient(func(ossClient *oss.Client) (interface{}, error) {
+						bucket, _ := ossClient.Bucket(d.Get("bucket").(string))
+						lor, err := bucket.ListObjectVersions()
+						if err == nil {
+							objectsToDelete := make([]oss.DeleteObject, 0)
+							for _, object := range lor.ObjectDeleteMarkers {
+								objectsToDelete = append(objectsToDelete, oss.DeleteObject{
+									Key:       object.Key,
+									VersionId: object.VersionId,
+								})
+							}
+
+							for _, object := range lor.ObjectVersions {
+								objectsToDelete = append(objectsToDelete, oss.DeleteObject{
+									Key:       object.Key,
+									VersionId: object.VersionId,
+								})
+							}
+
+							bucket.DeleteObjectVersions(objectsToDelete)
+						}
+						return nil, err;
+					})
+				}
+			}
 			return resource.RetryableError(fmt.Errorf("OSS Bucket %s is in use - trying again while it is deleted.", d.Id()))
 		}
 		bucket, err := ossService.QueryOssBucketById(d.Id())

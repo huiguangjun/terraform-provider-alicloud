@@ -25,7 +25,6 @@ const (
 	progressListener   = "x-progress-listener"
 	storageClass       = "storage-class"
 	responseHeader     = "x-response-header"
-	keysVersions       = "keys-versions"
 )
 
 type (
@@ -271,9 +270,19 @@ func VersionIdMarker(value string) Option {
 	return addParam("version-id-marker", value)
 }
 
-// VersionId is an option to set x-oss-version-id parameter
+// VersionId is an option to set versionId parameter
 func VersionId(value string) Option {
 	return addParam("versionId", value)
+}
+
+// TagKey is an option to set tag key parameter
+func TagKey(value string) Option {
+	return addParam("tag-key", value)
+}
+
+// TagValue is an option to set tag value parameter
+func TagValue(value string) Option {
+	return addParam("tag-value", value)
 }
 
 // UploadIDMarker is an option to set upload-id-marker parameter
@@ -336,11 +345,6 @@ func Progress(listener ProgressListener) Option {
 // GetResponseHeader for get response http header
 func GetResponseHeader(respHeader *http.Header) Option {
 	return addArg(responseHeader, respHeader)
-}
-
-// KeyVersions:object versions info
-func KeyVersions(mVersions map[string]string) Option {
-	return addArg(keysVersions, mVersions)
 }
 
 // ResponseContentType is an option to set response-content-type param
@@ -498,19 +502,19 @@ func deleteOption(options []Option, strKey string) []Option {
 	return outOption
 }
 
-func getRequestId(header http.Header) string {
+func GetRequestId(header http.Header) string {
 	return header.Get("x-oss-request-id")
 }
 
-func getVersionId(header http.Header) string {
+func GetVersionId(header http.Header) string {
 	return header.Get("x-oss-version-id")
 }
 
-func getCopySrcVersionId(header http.Header) string {
+func GetCopySrcVersionId(header http.Header) string {
 	return header.Get("x-oss-copy-source-version-id")
 }
 
-func getDeleteMark(header http.Header) bool {
+func GetDeleteMark(header http.Header) bool {
 	value := header.Get("x-oss-delete-marker")
 	if strings.ToUpper(value) == "TRUE" {
 		return true
