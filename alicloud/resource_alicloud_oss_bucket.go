@@ -302,6 +302,20 @@ func resourceAlicloudOssBucket() *schema.Resource {
 				},
 				MaxItems: 1,
 			},
+
+			"transfer_acceleration": {
+				Type:     schema.TypeList,
+				Optional: true,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"enabled": {
+							Type:     schema.TypeBool,
+							Required: true,
+						},
+					},
+				},
+				MaxItems: 1,
+			},
 		},
 	}
 }
@@ -616,6 +630,25 @@ func resourceAlicloudOssBucketRead(d *schema.ResourceData, meta interface{}) err
 		return WrapError(err)
 	}
 
+	// Read the bucket transfer acceleration status
+	raw, err = client.WithOssClient(func(ossClient *oss.Client) (interface{}, error) {
+		return ossClient.GetBucketTransferAcc(d.Id())
+	})
+	if err != nil && !ossNotFoundError(err) && !IsExpectedErrors(err, []string{"TransferAccelerationDisabled"}) {
+		return WrapErrorf(err, DefaultErrorMsg, d.Id(), "GetBucketTransferAcc", AliyunOssGoSdk)
+	}
+	acc, _ := raw.(oss.TransferAccConfiguration)
+	accMap := make([]map[string]interface{}, 0)
+	if err == nil && &acc != nil {
+		data := map[string]interface{}{
+			"enabled": acc.Enabled,
+		}
+		accMap = append(accMap, data)
+	}
+	if err := d.Set("transfer_acceleration", accMap); err != nil {
+		return WrapError(err)
+	}
+
 	return nil
 }
 
@@ -699,6 +732,13 @@ func resourceAlicloudOssBucketUpdate(d *schema.ResourceData, meta interface{}) e
 			return WrapError(err)
 		}
 		d.SetPartial("versioning")
+	}
+
+	if d.HasChange("transfer_acceleration") {
+		if err := resourceAlicloudOssBucketTransferAccUpdate(client, d); err != nil {
+			return WrapError(err)
+		}
+		d.SetPartial("transfer_acceleration")
 	}
 
 	d.Partial(false)
@@ -1132,6 +1172,41 @@ func resourceAlicloudOssBucketVersioningUpdate(client *connectivity.AliyunClient
 		})
 	}
 
+	return nil
+}
+
+func resourceAlicloudOssBucketTransferAccUpdate(client *connectivity.AliyunClient, d *schema.ResourceData) error {
+	acc := d.Get("transfer_acceleration").([]interface{})
+	var requestInfo *oss.Client
+	if acc == nil || len(acc) == 0 {
+		raw, err := client.WithOssClient(func(ossClient *oss.Client) (interface{}, error) {
+			requestInfo = ossClient
+			return nil, ossClient.DeleteBucketTransferAcc(d.Id())
+		})
+		if err != nil {
+			return WrapErrorf(err, DefaultErrorMsg, d.Id(), "DeleteBucketTransferAcc", AliyunOssGoSdk)
+		}
+		addDebug("DeleteBucketTransferAcc", raw, requestInfo, map[string]string{"bucketName": d.Id()})
+		return nil
+	}
+
+	var aacCfg oss.TransferAccConfiguration
+	c := acc[0].(map[string]interface{})
+	if v, ok := c["enabled"]; ok {
+		aacCfg.Enabled = v.(bool)
+	}
+
+	raw, err := client.WithOssClient(func(ossClient *oss.Client) (interface{}, error) {
+		requestInfo = ossClient
+		return nil, ossClient.SetBucketTransferAcc(d.Id(), aacCfg)
+	})
+	if err != nil {
+		return WrapErrorf(err, DefaultErrorMsg, d.Id(), "SetBucketTransferAcc", AliyunOssGoSdk)
+	}
+	addDebug("SetBucketTransferAcc", raw, requestInfo, map[string]interface{}{
+		"bucketName":     d.Id(),
+		"TransferAccConfiguration": aacCfg,
+	})
 	return nil
 }
 

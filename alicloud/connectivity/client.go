@@ -533,7 +533,7 @@ func (client *AliyunClient) WithOssClient(do func(*oss.Client) (interface{}, err
 
 	// Initialize the OSS client if necessary
 	if client.ossconn == nil {
-		schma := strings.ToLower(client.config.Protocol)
+		schma := "http" //strings.ToLower(client.config.Protocol)
 		endpoint := client.config.OssEndpoint
 		if endpoint == "" {
 			endpoint = loadEndpoint(client.config.RegionId, OSSCode)
