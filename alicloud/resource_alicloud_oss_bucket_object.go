@@ -96,8 +96,9 @@ func resourceAlicloudOssBucketObject() *schema.Resource {
 				Optional: true,
 				Computed: true,
 				ValidateFunc: validation.StringInSlice([]string{
-					string(ServerSideEncryptionKMS), string(ServerSideEncryptionAes256),
+					string(ServerSideEncryptionKMS), string(ServerSideEncryptionAes256), "None",
 				}, false),
+				Default: ServerSideEncryptionAes256,
 			},
 
 			"kms_key_id": {
@@ -156,7 +157,9 @@ func resourceAlicloudOssBucketObjectPut(d *schema.ResourceData, meta interface{}
 	options, err := buildObjectHeaderOptions(d)
 
 	if v, ok := d.GetOk("server_side_encryption"); ok {
-		options = append(options, oss.ServerSideEncryption(v.(string)))
+		if v != "None" {
+			options = append(options, oss.ServerSideEncryption(v.(string)))
+		}
 	}
 
 	if v, ok := d.GetOk("kms_key_id"); ok {

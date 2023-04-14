@@ -165,7 +165,7 @@ func TestAccAlicloudOssBucketObject_sse(t *testing.T) {
 					testAccCheck(map[string]string{
 						"bucket":                 name,
 						"source":                 tmpFile.Name(),
-						"server_side_encryption": NOSET,
+						"server_side_encryption": "AES256",
 					}),
 				),
 			},
@@ -187,6 +187,27 @@ func TestAccAlicloudOssBucketObject_sse(t *testing.T) {
 						"content_type":           "binary/octet-stream",
 						"acl":                    "private",
 						"server_side_encryption": "AES256",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bucket":                 "${alicloud_oss_bucket.default.bucket}",
+					"server_side_encryption": "None",
+					"key":                    "test-object-source-key-2",
+					"source":                 tmpFile.Name(),
+					"content_type":           "binary/octet-stream",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAlicloudOssBucketObjectExists(
+						"alicloud_oss_bucket_object.default", name, v),
+					testAccCheck(map[string]string{
+						"bucket":                 name,
+						"key":                    "test-object-source-key-2",
+						"source":                 tmpFile.Name(),
+						"content_type":           "binary/octet-stream",
+						"acl":                    "private",
+						"server_side_encryption": "None",
 					}),
 				),
 			},
@@ -225,10 +246,11 @@ func TestAccAlicloudOssBucketObject_sse1(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"bucket":       "${alicloud_oss_bucket.default.bucket}",
-					"key":          "test-object-source-key",
-					"source":       tmpFile.Name(),
-					"content_type": "binary/octet-stream",
+					"bucket":                 "${alicloud_oss_bucket.default.bucket}",
+					"key":                    "test-object-source-key",
+					"server_side_encryption": "None",
+					"source":                 tmpFile.Name(),
+					"content_type":           "binary/octet-stream",
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAlicloudOssBucketObjectExists(
