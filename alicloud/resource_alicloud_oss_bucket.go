@@ -139,6 +139,12 @@ func resourceAlicloudOssBucket() *schema.Resource {
 				MaxItems: 1,
 			},
 
+			"lifecycle_rule_allow_same_action_overlap": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+			},
+
 			"lifecycle_rule": {
 				Type:     schema.TypeList,
 				Optional: true,
@@ -212,6 +218,14 @@ func resourceAlicloudOssBucket() *schema.Resource {
 											string(oss.StorageColdArchive),
 										}, false),
 									},
+									"is_access_time": {
+										Type:     schema.TypeBool,
+										Optional: true,
+									},
+									"return_to_std_when_visit": {
+										Type:     schema.TypeBool,
+										Optional: true,
+									},
 								},
 							},
 						},
@@ -265,6 +279,53 @@ func resourceAlicloudOssBucket() *schema.Resource {
 											string(oss.StorageArchive),
 											string(oss.StorageColdArchive),
 										}, false),
+									},
+									"is_access_time": {
+										Type:     schema.TypeBool,
+										Optional: true,
+									},
+									"return_to_std_when_visit": {
+										Type:     schema.TypeBool,
+										Optional: true,
+									},
+								},
+							},
+						},
+						"filter": {
+							Type:     schema.TypeList,
+							Optional: true,
+							MaxItems: 1,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"not": {
+										Type:     schema.TypeList,
+										Optional: true,
+										MaxItems: 1,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"prefix": {
+													Type:     schema.TypeString,
+													Optional: true,
+												},
+												"tag": {
+													Type:     schema.TypeList,
+													MaxItems: 1,
+													Optional: true,
+													Elem: &schema.Resource{
+														Schema: map[string]*schema.Schema{
+															"key": {
+																Type:     schema.TypeString,
+																Required: true,
+															},
+															"value": {
+																Type:     schema.TypeString,
+																Required: true,
+															},
+														},
+													},
+												},
+											},
+										},
 									},
 								},
 							},
@@ -649,6 +710,12 @@ func resourceAlicloudOssBucketRead(d *schema.ResourceData, meta interface{}) err
 				}
 				e["days"] = transition.Days
 				e["storage_class"] = string(transition.StorageClass)
+				if transition.IsAccessTime != nil {
+					e["is_access_time"] = *transition.IsAccessTime
+				}
+				if transition.ReturnToStdWhenVisit != nil {
+					e["return_to_std_when_visit"] = *transition.ReturnToStdWhenVisit
+				}
 				eSli = append(eSli, e)
 			}
 			rule["transitions"] = schema.NewSet(transitionsHash, eSli)
@@ -682,6 +749,12 @@ func resourceAlicloudOssBucketRead(d *schema.ResourceData, meta interface{}) err
 				e := make(map[string]interface{})
 				e["days"] = transition.NoncurrentDays
 				e["storage_class"] = string(transition.StorageClass)
+				if transition.IsAccessTime != nil {
+					e["is_access_time"] = *transition.IsAccessTime
+				}
+				if transition.ReturnToStdWhenVisit != nil {
+					e["return_to_std_when_visit"] = *transition.ReturnToStdWhenVisit
+				}
 				eSli = append(eSli, e)
 			}
 			rule["noncurrent_version_transition"] = schema.NewSet(transitionsHash, eSli)
@@ -1141,6 +1214,14 @@ func resourceAlicloudOssBucketLifecycleRuleUpdate(client *connectivity.AliyunCli
 				if valStorageClass != "" {
 					i.StorageClass = oss.StorageClassType(valStorageClass)
 				}
+
+				if val, ok := transition.(map[string]interface{})["is_access_time"].(bool); ok && val {
+					i.IsAccessTime = &val
+					if val1, ok := transition.(map[string]interface{})["return_to_std_when_visit"].(bool); ok && val1 {
+						i.ReturnToStdWhenVisit = &val1
+					}
+				}
+
 				rule.Transitions = append(rule.Transitions, i)
 			}
 		}
@@ -1188,6 +1269,13 @@ func resourceAlicloudOssBucketLifecycleRuleUpdate(client *connectivity.AliyunCli
 				i.NoncurrentDays = valDays
 				i.StorageClass = oss.StorageClassType(valStorageClass)
 
+				if val, ok := transition.(map[string]interface{})["is_access_time"].(bool); ok && val {
+					i.IsAccessTime = &val
+					if val1, ok := transition.(map[string]interface{})["return_to_std_when_visit"].(bool); ok && val1 {
+						i.ReturnToStdWhenVisit = &val1
+					}
+				}
+
 				rule.NonVersionTransitions = append(rule.NonVersionTransitions, i)
 			}
 		}
@@ -1195,9 +1283,13 @@ func resourceAlicloudOssBucketLifecycleRuleUpdate(client *connectivity.AliyunCli
 		rules = append(rules, rule)
 	}
 
+	options := []oss.Option{}
+	if d.Get("lifecycle_rule_allow_same_action_overlap").(bool) {
+		options = append(options, oss.AllowSameActionOverLap(true))
+	}
 	raw, err := client.WithOssClient(func(ossClient *oss.Client) (interface{}, error) {
 		requestInfo = ossClient
-		return nil, ossClient.SetBucketLifecycle(bucket, rules)
+		return nil, ossClient.SetBucketLifecycle(bucket, rules, options...)
 	})
 	if err != nil {
 		return WrapErrorf(err, DefaultErrorMsg, d.Id(), "SetBucketLifecycle", AliyunOssGoSdk)
@@ -1467,6 +1559,12 @@ func transitionsHash(v interface{}) int {
 	}
 	if v, ok := m["days"]; ok {
 		buf.WriteString(fmt.Sprintf("%d-", v.(int)))
+	}
+	if v, ok := m["is_access_time"]; ok {
+		buf.WriteString(fmt.Sprintf("%v-", v.(bool)))
+	}
+	if v, ok := m["return_to_std_when_visit"]; ok {
+		buf.WriteString(fmt.Sprintf("%v-", v.(bool)))
 	}
 	return hashcode.String(buf.String())
 }

@@ -370,6 +370,7 @@ The following arguments are supported:
 * `versioning` - (Optional, Available in 1.45.0+) A state of versioning (documented below).
 * `force_destroy` - (Optional, Available in 1.45.0+) A boolean that indicates all objects should be deleted from the bucket so that the bucket can be destroyed without error. These objects are not recoverable. Defaults to "false".
 * `transfer_acceleration` - (Optional, Available in 1.123.1+) A transfer acceleration status of a bucket (documented below).
+* `lifecycle_rule_allow_same_action_overlap` - (Optional, Available in 1.45.0+) A boolean that indicates lifecycle rules allow prefix overlap.
 
 #### Block cors_rule
 
@@ -435,6 +436,8 @@ The lifecycle_rule transitions object supports the following:
 * `created_before_date` - (Optional) Specifies the time before which the rules take effect. The date must conform to the ISO8601 format and always be UTC 00:00. For example: 2002-10-11T00:00:00.000Z indicates that objects updated before 2002-10-11T00:00:00.000Z are deleted or converted to another storage class, and objects updated after this time (including this time) are not deleted or converted.
 * `days` - (Optional, Type: int) Specifies the number of days after object creation when the specific rule action takes effect.
 * `storage_class` - (Required) Specifies the storage class that objects that conform to the rule are converted into. The storage class of the objects in a bucket of the IA storage class can be converted into Archive but cannot be converted into Standard. Values: `IA`, `Archive`, `ColdArchive`. ColdArchive is available in 1.203.0+.
+* `is_access_time` - (Optional, Type: bool, Available in 1.121.2+) Specifies whether the lifecycle rule applies to objects based on their last access time. If set to `true`, the rule applies to objects based on their last access time; if set to `false`, the rule applies to objects based on their last modified time.
+* `return_to_std_when_visit` - (Optional, Type: bool, Available in 1.121.2+) Specifies whether to convert the storage class of non-Standard objects back to Standard after the objects are accessed. It takes effect only when the IsAccessTime parameter is set to true. If set to `true`, converts the storage class of the objects to Standard; if set to `false`, does not convert the storage class of the objects to Standard.
 
 `NOTE`: One and only one of "created_before_date" and "days" can be specified in one transition configuration.
 
@@ -459,7 +462,8 @@ The lifecycle_rule noncurrent_version_transition object supports the following:
 
 * `days` - (Required, Type: int) Specifies the number of days noncurrent object versions transition.
 * `storage_class` - (Required) Specifies the storage class that objects that conform to the rule are converted into. The storage class of the objects in a bucket of the IA storage class can be converted into Archive but cannot be converted into Standard. Values: `IA`, `Archive`, `CodeArchive`. ColdArchive is available in 1.203.0+.
-
+* `is_access_time` - (Optional, Type: bool, Available in 1.121.2+) Specifies whether the lifecycle rule applies to objects based on their last access time. If set to `true`, the rule applies to objects based on their last access time; if set to `false`, the rule applies to objects based on their last modified time.
+* `return_to_std_when_visit` - (Optional, Type: bool, Available in 1.121.2+) Specifies whether to convert the storage class of non-Standard objects back to Standard after the objects are accessed. It takes effect only when the IsAccessTime parameter is set to true. If set to `true`, converts the storage class of the objects to Standard; if set to `false`, does not convert the storage class of the objects to Standard.
 
 #### Block server-side encryption rule
 
