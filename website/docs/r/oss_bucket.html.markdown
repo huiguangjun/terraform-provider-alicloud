@@ -234,6 +234,32 @@ resource "alicloud_oss_bucket" "bucket-access-monitor-lifecycle" {
   }
 }
 
+resource "alicloud_oss_bucket" "bucket-tag-lifecycle" {
+  bucket = "example-lifecycle-${random_integer.default.result}"
+  acl    = "private"
+
+  lifecycle_rule {
+    id      = "rule-days-transition"
+    prefix  = "path/"
+    enabled = true
+
+    tag {
+      key = "key1"
+      value = "value1"
+    }
+
+    tag {
+      key = "key2"
+      value = "value2"
+    }
+
+    transitions {
+      created_before_date      = "2022-11-11"
+      storage_class            = "IA"
+    }
+  }
+}
+
 ```
 
 Set bucket policy 
@@ -444,6 +470,7 @@ The lifecycle_rule configuration block supports the following:
 * `abort_multipart_upload` - (Optional, Type: set, Available since 1.121.2) Specifies the number of days after initiating a multipart upload when the multipart upload must be completed. See [`abort_multipart_upload`](#lifecycle_rule-abort_multipart_upload) below.
 * `noncurrent_version_expiration` - (Optional, Type: set, Available since 1.121.2) Specifies when noncurrent object versions expire. See [`noncurrent_version_expiration`](#lifecycle_rule-noncurrent_version_expiration) below.
 * `noncurrent_version_transition` - (Optional, Type: set, Available since 1.121.2) Specifies when noncurrent object versions transitions. See [`noncurrent_version_transition`](#lifecycle_rule-noncurrent_version_transition) below.
+* `tag` - (Optional, Available since 1.208.2) The tag of objects that match the rule. You can specify multiple tags. See [`tag`](#lifecycle_rule-tag) below.
 
 `NOTE`: At least one of expiration, transitions, abort_multipart_upload, noncurrent_version_expiration and noncurrent_version_transition should be configured.
 
@@ -492,6 +519,13 @@ The noncurrent_version_transition configuration block supports the following:
 * `storage_class` - (Required) Specifies the storage class that objects that conform to the rule are converted into. The storage class of the objects in a bucket of the IA storage class can be converted into Archive but cannot be converted into Standard. Values: `IA`, `Archive`, `CodeArchive`. ColdArchive is available since 1.203.0.
 * `is_access_time` - (Optional, Type: bool, Available since 1.208.1) Specifies whether the lifecycle rule applies to objects based on their last access time. If set to `true`, the rule applies to objects based on their last access time; if set to `false`, the rule applies to objects based on their last modified time. If configure the rule based on the last access time, please enable `access_monitor` first.
 * `return_to_std_when_visit` - (Optional, Type: bool, Available since 1.208.1) Specifies whether to convert the storage class of non-Standard objects back to Standard after the objects are accessed. It takes effect only when the IsAccessTime parameter is set to true. If set to `true`, converts the storage class of the objects to Standard; if set to `false`, does not convert the storage class of the objects to Standard.
+
+### `lifecycle_rule-tag`
+
+The tag configuration block supports the following arguments:
+
+* `key` - (Required) The key of the tag that is specified for the objects.
+* `value` - (Required) The value of the tag that is specified for the objects.
 
 ### `server_side_encryption_rule`
 

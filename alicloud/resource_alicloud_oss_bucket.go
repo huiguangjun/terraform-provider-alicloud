@@ -288,6 +288,61 @@ func resourceAlicloudOssBucket() *schema.Resource {
 								},
 							},
 						},
+						"tag": {
+							Type:     schema.TypeList,
+							Optional: true,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"key": {
+										Type:     schema.TypeString,
+										Required: true,
+									},
+									"value": {
+										Type:     schema.TypeString,
+										Required: true,
+									},
+								},
+							},
+						},
+						"filter": {
+							Type:     schema.TypeList,
+							Optional: true,
+							MaxItems: 1,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"not": {
+										Type:     schema.TypeList,
+										Optional: true,
+										MaxItems: 1,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"prefix": {
+													Type:     schema.TypeString,
+													Required: true,
+												},
+												"tag": {
+													Type:     schema.TypeList,
+													MaxItems: 1,
+													Optional: true,
+													Elem: &schema.Resource{
+														Schema: map[string]*schema.Schema{
+															"key": {
+																Type:     schema.TypeString,
+																Required: true,
+															},
+															"value": {
+																Type:     schema.TypeString,
+																Required: true,
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 				MaxItems: 1000,
@@ -746,6 +801,17 @@ func resourceAlicloudOssBucketRead(d *schema.ResourceData, meta interface{}) err
 				eSli = append(eSli, e)
 			}
 			rule["noncurrent_version_transition"] = schema.NewSet(transitionsHash, eSli)
+		}
+		// Tags
+		if len(lifecycleRule.Tags) != 0 {
+			var eSli []interface{}
+			for _, tag := range lifecycleRule.Tags {
+				e := make(map[string]interface{})
+				e["key"] = string(tag.Key)
+				e["value"] = string(tag.Value)
+				eSli = append(eSli, e)
+			}
+			rule["tag"] = eSli
 		}
 		lrules = append(lrules, rule)
 	}
@@ -1282,6 +1348,19 @@ func resourceAlicloudOssBucketLifecycleRuleUpdate(client *connectivity.AliyunCli
 				}
 
 				rule.NonVersionTransitions = append(rule.NonVersionTransitions, i)
+			}
+		}
+
+		// tag
+		ruleTags := d.Get(fmt.Sprintf("lifecycle_rule.%d.tag", i)).([]interface{})
+		if len(ruleTags) > 0 {
+			for _, tag := range ruleTags {
+				i := oss.Tag{}
+
+				i.Key = tag.(map[string]interface{})["key"].(string)
+				i.Value = tag.(map[string]interface{})["value"].(string)
+
+				rule.Tags = append(rule.Tags, i)
 			}
 		}
 
