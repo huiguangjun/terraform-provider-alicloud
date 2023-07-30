@@ -1832,6 +1832,310 @@ func TestAccAlicloudOssBucketLifeCycleTags(t *testing.T) {
 	})
 }
 
+func TestAccAlicloudOssBucketLifeCycleFilter(t *testing.T) {
+	var v oss.GetBucketInfoResult
+
+	resourceId := "alicloud_oss_bucket.default"
+	ra := resourceAttrInit(resourceId, ossBucketBasicMap)
+
+	serviceFunc := func() interface{} {
+		return &OssService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}
+	rc := resourceCheckInit(resourceId, &v, serviceFunc)
+
+	rac := resourceAttrCheckInit(rc, ra)
+
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(1000000, 9999999)
+	name := fmt.Sprintf("tf-testacc-bucket-%d", rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, resourceOssBucketConfigBasic)
+	hashcode1 := strconv.Itoa(transitionsHash(map[string]interface{}{
+		"days":                     3,
+		"created_before_date":      "",
+		"storage_class":            "IA",
+		"is_access_time":           false,
+		"return_to_std_when_visit": false,
+	}))
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		// module name
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bucket": name,
+					"acl":    "public-read",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"bucket":                  name,
+						"acl":                     "public-read",
+						"access_monitor.#":        "1",
+						"access_monitor.0.status": "Disabled",
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"force_destroy", "lifecycle_rule_allow_same_action_overlap"},
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"lifecycle_rule": []map[string]interface{}{
+						{
+							"id":      "rule1",
+							"prefix":  "path1/",
+							"enabled": "true",
+							"transitions": []map[string]interface{}{
+								{
+									"days":          "3",
+									"storage_class": "IA",
+								},
+							},
+							"filter": []map[string]interface{}{
+								{
+									"not": []map[string]interface{}{
+										{
+											"prefix": "path1/sub",
+										},
+									},
+								},
+							},
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"lifecycle_rule.#":                                             "1",
+						"lifecycle_rule.0.id":                                          "rule1",
+						"lifecycle_rule.0.prefix":                                      "path1/",
+						"lifecycle_rule.0.enabled":                                     "true",
+						"lifecycle_rule.0.transitions." + hashcode1 + ".days":          "3",
+						"lifecycle_rule.0.transitions." + hashcode1 + ".storage_class": string(oss.StorageIA),
+						"lifecycle_rule.0.filter.#":                                    "1",
+						"lifecycle_rule.0.filter.0.not.#":                              "1",
+						"lifecycle_rule.0.filter.0.not.0.prefix":                       "path1/sub",
+						"lifecycle_rule.0.filter.0.not.0.tag.#":                        "0",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"lifecycle_rule": []map[string]interface{}{
+						{
+							"id":      "rule1",
+							"prefix":  "path1/",
+							"enabled": "true",
+							"transitions": []map[string]interface{}{
+								{
+									"days":          "3",
+									"storage_class": "IA",
+								},
+							},
+							"filter": []map[string]interface{}{
+								{
+									"not": []map[string]interface{}{
+										{
+											"prefix": "path1/sub1",
+											"tag": []map[string]interface{}{
+												{
+													"key":   "key1",
+													"value": "value1",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"lifecycle_rule.#":                                             "1",
+						"lifecycle_rule.0.id":                                          "rule1",
+						"lifecycle_rule.0.prefix":                                      "path1/",
+						"lifecycle_rule.0.enabled":                                     "true",
+						"lifecycle_rule.0.transitions." + hashcode1 + ".days":          "3",
+						"lifecycle_rule.0.transitions." + hashcode1 + ".storage_class": string(oss.StorageIA),
+						"lifecycle_rule.0.filter.#":                                    "1",
+						"lifecycle_rule.0.filter.0.not.#":                              "1",
+						"lifecycle_rule.0.filter.0.not.0.prefix":                       "path1/sub1",
+						"lifecycle_rule.0.filter.0.not.0.tag.#":                        "1",
+						"lifecycle_rule.0.filter.0.not.0.tag.0.key":                    "key1",
+						"lifecycle_rule.0.filter.0.not.0.tag.0.value":                  "value1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"lifecycle_rule": []map[string]interface{}{
+						{
+							"id":      "rule1",
+							"enabled": "true",
+							"transitions": []map[string]interface{}{
+								{
+									"days":          "3",
+									"storage_class": "IA",
+								},
+							},
+							"filter": []map[string]interface{}{
+								{
+									"object_size_greater_than": "1",
+								},
+							},
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"lifecycle_rule.#":                                             "1",
+						"lifecycle_rule.0.id":                                          "rule1",
+						"lifecycle_rule.0.prefix":                                      REMOVEKEY,
+						"lifecycle_rule.0.enabled":                                     "true",
+						"lifecycle_rule.0.transitions." + hashcode1 + ".days":          "3",
+						"lifecycle_rule.0.transitions." + hashcode1 + ".storage_class": string(oss.StorageIA),
+						"lifecycle_rule.0.filter.#":                                    "1",
+						"lifecycle_rule.0.filter.0.not.#":                              "0",
+						"lifecycle_rule.0.filter.0.not.0.prefix":                       REMOVEKEY,
+						"lifecycle_rule.0.filter.0.not.0.tag.#":                        "0",
+						"lifecycle_rule.0.filter.0.not.0.tag.0.key":                    REMOVEKEY,
+						"lifecycle_rule.0.filter.0.not.0.tag.0.value":                  REMOVEKEY,
+						"lifecycle_rule.0.filter.0.object_size_greater_than":           "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"lifecycle_rule": []map[string]interface{}{
+						{
+							"id":      "rule1",
+							"enabled": "true",
+							"transitions": []map[string]interface{}{
+								{
+									"days":          "3",
+									"storage_class": "IA",
+								},
+							},
+							"filter": []map[string]interface{}{
+								{
+									"object_size_less_than": "1",
+								},
+							},
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"lifecycle_rule.#":                                             "1",
+						"lifecycle_rule.0.id":                                          "rule1",
+						"lifecycle_rule.0.enabled":                                     "true",
+						"lifecycle_rule.0.transitions." + hashcode1 + ".days":          "3",
+						"lifecycle_rule.0.transitions." + hashcode1 + ".storage_class": string(oss.StorageIA),
+						"lifecycle_rule.0.filter.#":                                    "1",
+						"lifecycle_rule.0.filter.0.not.#":                              "0",
+						"lifecycle_rule.0.filter.0.object_size_greater_than":           REMOVEKEY,
+						"lifecycle_rule.0.filter.0.object_size_less_than":              "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"lifecycle_rule": []map[string]interface{}{
+						{
+							"id":      "rule1",
+							"prefix":  "path1/",
+							"enabled": "true",
+							"transitions": []map[string]interface{}{
+								{
+									"days":          "3",
+									"storage_class": "IA",
+								},
+							},
+							"filter": []map[string]interface{}{
+								{
+									"not": []map[string]interface{}{
+										{
+											"prefix": "path1/sub1",
+											"tag": []map[string]interface{}{
+												{
+													"key":   "key2",
+													"value": "value2",
+												},
+											},
+										},
+									},
+									"object_size_greater_than": "2",
+									"object_size_less_than":    "4",
+								},
+							},
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"lifecycle_rule.#":                                             "1",
+						"lifecycle_rule.0.id":                                          "rule1",
+						"lifecycle_rule.0.prefix":                                      "path1/",
+						"lifecycle_rule.0.enabled":                                     "true",
+						"lifecycle_rule.0.transitions." + hashcode1 + ".days":          "3",
+						"lifecycle_rule.0.transitions." + hashcode1 + ".storage_class": string(oss.StorageIA),
+						"lifecycle_rule.0.filter.#":                                    "1",
+						"lifecycle_rule.0.filter.0.not.#":                              "1",
+						"lifecycle_rule.0.filter.0.not.0.prefix":                       "path1/sub1",
+						"lifecycle_rule.0.filter.0.not.0.tag.#":                        "1",
+						"lifecycle_rule.0.filter.0.not.0.tag.0.key":                    "key2",
+						"lifecycle_rule.0.filter.0.not.0.tag.0.value":                  "value2",
+						"lifecycle_rule.0.filter.0.object_size_greater_than":           "2",
+						"lifecycle_rule.0.filter.0.object_size_less_than":              "4",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"lifecycle_rule": []map[string]interface{}{
+						{
+							"id":      "rule1",
+							"prefix":  "path1/",
+							"enabled": "true",
+							"transitions": []map[string]interface{}{
+								{
+									"days":          "3",
+									"storage_class": "IA",
+								},
+							},
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"lifecycle_rule.#":                                             "1",
+						"lifecycle_rule.0.id":                                          "rule1",
+						"lifecycle_rule.0.prefix":                                      "path1/",
+						"lifecycle_rule.0.enabled":                                     "true",
+						"lifecycle_rule.0.transitions." + hashcode1 + ".days":          "3",
+						"lifecycle_rule.0.transitions." + hashcode1 + ".storage_class": string(oss.StorageIA),
+						"lifecycle_rule.0.filter.#":                                    "0",
+						"lifecycle_rule.0.filter.0.not.#":                              "0",
+						"lifecycle_rule.0.filter.0.not.0.prefix":                       REMOVEKEY,
+						"lifecycle_rule.0.filter.0.not.0.tag.#":                        "0",
+						"lifecycle_rule.0.filter.0.not.0.tag.0.key":                    REMOVEKEY,
+						"lifecycle_rule.0.filter.0.not.0.tag.0.value":                  REMOVEKEY,
+						"lifecycle_rule.0.filter.0.object_size_greater_than":           REMOVEKEY,
+						"lifecycle_rule.0.filter.0.object_size_less_than":              REMOVEKEY,
+					}),
+				),
+			},
+		},
+	})
+}
+
 func resourceOssBucketConfigBasic(name string) string {
 	return fmt.Sprintf("")
 }
