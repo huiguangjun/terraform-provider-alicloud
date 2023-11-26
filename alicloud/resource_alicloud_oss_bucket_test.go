@@ -2184,6 +2184,121 @@ func TestAccAliCloudOssBucketLifeCycleFilter(t *testing.T) {
 	})
 }
 
+func TestAccAliCloudOssBucketCorsResponseVary(t *testing.T) {
+	var v oss.GetBucketInfoResult
+
+	resourceId := "alicloud_oss_bucket.default"
+	ra := resourceAttrInit(resourceId, ossBucketBasicMap)
+
+	serviceFunc := func() interface{} {
+		return &OssService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}
+	rc := resourceCheckInit(resourceId, &v, serviceFunc)
+
+	rac := resourceAttrCheckInit(rc, ra)
+
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(1000000, 9999999)
+	name := fmt.Sprintf("tf-testacc-bucket-%d", rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, resourceOssBucketConfigBasic)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		// module name
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bucket": name,
+					"acl":    "public-read",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"bucket":                  name,
+						"acl":                     "public-read",
+						"access_monitor.#":        "1",
+						"access_monitor.0.status": "Disabled",
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"force_destroy", "lifecycle_rule_allow_same_action_overlap", "cors_response_vary"},
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"cors_rule": []map[string]interface{}{
+						{
+							"allowed_origins": []string{"*"},
+							"allowed_methods": []string{"PUT", "GET"},
+							"allowed_headers": []string{"authorization"},
+							"max_age_seconds": "100",							
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"cors_rule.#":                   "2",
+						"cors_rule.0.allowed_headers.0": "authorization",
+						"cors_rule.0.max_age_seconds": "100",
+						"cors_response_vary": "false",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"cors_response_vary": true,
+					"cors_rule": []map[string]interface{}{
+						{
+							"allowed_origins": []string{"*"},
+							"allowed_methods": []string{"PUT", "GET"},
+							"allowed_headers": []string{"authorization"},
+							"cors_rule.0.max_age_seconds": "80",
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"cors_rule.#":                   "2",
+						"cors_rule.0.allowed_headers.0": "authorization",
+						"cors_rule.0.max_age_seconds": "80",
+						"cors_response_vary": "true",
+					}),
+				),
+			},
+/*			
+
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"cors_response_vary": "false",
+					"cors_rule": []map[string]interface{}{
+						{
+							"allowed_origins": []string{"*"},
+							"allowed_methods": []string{"PUT", "GET"},
+							"allowed_headers": []string{"authorization"},
+							"cors_rule.0.max_age_seconds": "90",
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"cors_rule.#":                   "2",
+						"cors_rule.0.allowed_headers.0": "authorization",
+						"cors_rule.0.max_age_seconds": "90",
+						"cors_response_vary": "false",
+					}),
+				),
+			},
+			*/		
+		},
+	})
+}
+
 func resourceOssBucketConfigBasic(name string) string {
 	return fmt.Sprintf("")
 }

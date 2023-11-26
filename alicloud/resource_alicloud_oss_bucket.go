@@ -2,6 +2,7 @@ package alicloud
 
 import (
 	"bytes"
+	"encoding/xml"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -473,6 +474,22 @@ func resourceAlicloudOssBucket() *schema.Resource {
 				},
 				MaxItems: 1,
 			},
+
+			"cors_config": {
+				Type:     schema.TypeList,
+				Optional: true,
+				Computed: true,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"response_vary": {
+							Type:     schema.TypeBool,
+							Optional: true,
+							Computed: true,
+						},
+					},
+				},
+				MaxItems: 1,
+			},
 		},
 	}
 }
@@ -599,13 +616,19 @@ func resourceAlicloudOssBucketRead(d *schema.ResourceData, meta interface{}) err
 	// Read the CORS
 	raw, err := client.WithOssClient(func(ossClient *oss.Client) (interface{}, error) {
 		requestInfo = ossClient
-		return ossClient.GetBucketCORS(request["bucketName"])
+		return ossClient.GetBucketCORSXml(request["bucketName"])
 	})
 	if err != nil && !IsExpectedErrors(err, []string{"NoSuchCORSConfiguration"}) {
 		return WrapErrorf(err, DefaultErrorMsg, d.Id(), "GetBucketCORS", AliyunOssGoSdk)
 	}
 	addDebug("GetBucketCORS", raw, requestInfo, request)
-	cors, _ := raw.(oss.GetBucketCORSResult)
+	xmlbody, _ := raw.(string)
+	cors := CORSXML{}
+	if len(xmlbody) > 0 {
+		if err = xml.Unmarshal([]byte(xmlbody), &cors); err != nil {
+			return WrapError(err)
+		}
+	}
 	rules := make([]map[string]interface{}, 0, len(cors.CORSRules))
 	for _, r := range cors.CORSRules {
 		rule := make(map[string]interface{})
@@ -619,6 +642,14 @@ func resourceAlicloudOssBucketRead(d *schema.ResourceData, meta interface{}) err
 	}
 	if err := d.Set("cors_rule", rules); err != nil {
 		return WrapError(err)
+	}
+	if len(cors.CORSRules) > 0 {
+		data := map[string]interface{}{
+			"response_vary": cors.ResponseVary,
+		}
+		cors_cfg := make([]map[string]interface{}, 0)
+		cors_cfg = append(cors_cfg, data)
+		d.Set("cors_config", cors_cfg)
 	}
 
 	// Read the website configuration
@@ -936,11 +967,12 @@ func resourceAlicloudOssBucketUpdate(d *schema.ResourceData, meta interface{}) e
 		d.SetPartial("acl")
 	}
 
-	if d.HasChange("cors_rule") {
+	if d.HasChange("cors_rule") || d.HasChange("cors_config") {
 		if err := resourceAlicloudOssBucketCorsUpdate(client, d); err != nil {
 			return WrapError(err)
 		}
 		d.SetPartial("cors_rule")
+		d.SetPartial("cors_config")
 	}
 
 	if d.HasChange("website") {
@@ -1027,6 +1059,12 @@ func resourceAlicloudOssBucketUpdate(d *schema.ResourceData, meta interface{}) e
 	return resourceAlicloudOssBucketRead(d, meta)
 }
 
+type CORSXML struct {
+	XMLName      xml.Name       `xml:"CORSConfiguration"`
+	CORSRules    []oss.CORSRule `xml:"CORSRule"`
+	ResponseVary bool           `xml:"ResponseVary,omitempty"`
+}
+
 func resourceAlicloudOssBucketCorsUpdate(client *connectivity.AliyunClient, d *schema.ResourceData) error {
 	cors := d.Get("cors_rule").([]interface{})
 	var requestInfo *oss.Client
@@ -1048,6 +1086,7 @@ func resourceAlicloudOssBucketCorsUpdate(client *connectivity.AliyunClient, d *s
 		return nil
 	}
 	// Put CORS
+	corsxml := CORSXML{}
 	rules := make([]oss.CORSRule, 0, len(cors))
 	for _, c := range cors {
 		corsMap := c.(map[string]interface{})
@@ -1075,18 +1114,32 @@ func resourceAlicloudOssBucketCorsUpdate(client *connectivity.AliyunClient, d *s
 		}
 		rules = append(rules, rule)
 	}
+	corsxml.CORSRules = rules
 
-	log.Printf("[DEBUG] Oss bucket: %s, put CORS: %#v", d.Id(), cors)
+	am := d.Get("cors_config").([]interface{})
+	if len(am) == 1 {
+		c := am[0].(map[string]interface{})
+		if v, ok := c["response_vary"]; ok {
+			corsxml.ResponseVary = v.(bool)
+		}
+	}
+
+	xmlbody, err := xml.Marshal(corsxml)
+	if err != nil {
+		return WrapError(err)
+	}
+
+	log.Printf("[DEBUG] Oss bucket: %s, put CORS: %#v", d.Id(), corsxml)
 	raw, err := client.WithOssClient(func(ossClient *oss.Client) (interface{}, error) {
 		requestInfo = ossClient
-		return nil, ossClient.SetBucketCORS(d.Id(), rules)
+		return nil, ossClient.SetBucketCORSXml(d.Id(), string(xmlbody))
 	})
 	if err != nil {
 		return WrapErrorf(err, DefaultErrorMsg, d.Id(), "SetBucketCORS", AliyunOssGoSdk)
 	}
 	addDebug("SetBucketCORS", raw, requestInfo, map[string]interface{}{
 		"bucketName": d.Id(),
-		"corsRules":  rules,
+		"corsConfig": corsxml,
 	})
 	return nil
 }
